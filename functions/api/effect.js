@@ -2,11 +2,23 @@
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const kv = env.WLED_EFFECT; // KV binding name (set in dashboard)
 
-  // Handle POST from Home Assistant
-  if (request.method === 'POST') {
-    try {
+  try {
+    const kv = env.WLED_EFFECT; // KV binding name (set in dashboard)
+
+    // Helpful check for missing KV binding
+    if (!kv) {
+      return new Response(
+        JSON.stringify({ error: 'KV binding WLED_EFFECT is missing' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Handle POST from Home Assistant
+    if (request.method === 'POST') {
       const body = await request.json();
 
       // Basic validation
@@ -32,32 +44,36 @@ export async function onRequest(context) {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (err) {
-      return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-        status: 400,
+    }
+
+    // Handle GET from browser
+    if (request.method === 'GET') {
+      const value = await kv.get('current_effect');
+
+      if (!value) {
+        // No value yet
+        return new Response(
+          JSON.stringify({ effect: null, updated_at: null }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(value, {
+        status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    // Other methods are not allowed
+    return new Response('Method not allowed', { status: 405 });
+  } catch (err) {
+    // Simple error response for debugging
+    return new Response(
+      JSON.stringify({ error: String(err) }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
-
-  // Handle GET from browser
-  if (request.method === 'GET') {
-    const value = await kv.get('current_effect');
-
-    if (!value) {
-      // No value yet
-      return new Response(
-        JSON.stringify({ effect: null, updated_at: null }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    return new Response(value, {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Other methods are not allowed
-  return new Response('Method not allowed', { status: 405 });
 }
